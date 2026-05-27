@@ -54,20 +54,22 @@
     '  <div class="mbs-panel">',
     '    <div class="mbs-panel-header">',
     '      <div>',
-    '        <div class="mbs-panel-title">Inventory</div>',
-    '        <div class="mbs-panel-subtitle">Pick a block, choose a brush, and build.</div>',
-    '      </div>',
-    '      <div class="mbs-panel-actions">',
-    '        <button class="mbs-action" data-action="clear" type="button">Clear</button>',
-    '      </div>',
-    '    </div>',
-    '    <div class="mbs-grid"></div>',
-    '    <div class="mbs-brush-row"></div>',
-    '    <label class="mbs-slider-wrap">',
-    '      <span class="mbs-slider-label">Block Size <strong class="mbs-size-value">115%</strong></span>',
-    '      <input class="mbs-size-slider" type="range" min="80" max="170" step="5" value="115" />',
-    '    </label>',
-    '    <div class="mbs-footer">Left click builds. Right click removes. G toggles inventory. B cycles brush mode. 1-3 select blocks. 0 selects random.</div>',
+      '        <div class="mbs-panel-title">Inventory</div>',
+      '        <div class="mbs-panel-subtitle">Pick a block, choose a brush, and build.</div>',
+      '      </div>',
+      '      <div class="mbs-panel-actions">',
+      '        <button class="mbs-action" data-action="clear" type="button">Clear</button>',
+      '      </div>',
+      '    </div>',
+      '    <div class="mbs-blocks-row"></div>',
+      '    <div class="mbs-brush-row"></div>',
+      '    <label class="mbs-slider-wrap">',
+      '      <span class="mbs-slider-label">Block Size <strong class="mbs-size-value">115%</strong></span>',
+      '      <input class="mbs-size-slider" type="range" min="80" max="170" step="5" value="115" />',
+      '    </label>',
+      // Footer info removed as requested
+      '  </div>',
+      '</div>',
     '  </div>',
     '</div>'
   ].join("");
@@ -78,7 +80,7 @@
   const menuToggle = root.querySelector(".mbs-menu-toggle");
   const panel = root.querySelector(".mbs-panel");
   const panelSubtitle = root.querySelector(".mbs-panel-subtitle");
-  const grid = root.querySelector(".mbs-grid");
+  const blocksRow = root.querySelector(".mbs-blocks-row");
   const brushRow = root.querySelector(".mbs-brush-row");
   const sizeSlider = root.querySelector(".mbs-size-slider");
   const sizeValue = root.querySelector(".mbs-size-value");
@@ -107,7 +109,7 @@
   };
   window[INSTANCE_KEY] = state;
 
-  buildBlockGrid();
+  buildBlockRow();
   buildBrushButtons();
   syncCanvasSize();
   rebuildBoundaries();
@@ -236,35 +238,29 @@
     delete window[INSTANCE_KEY];
   };
 
-  function buildBlockGrid() {
-    grid.textContent = "";
+  function buildBlockRow() {
+    blocksRow.textContent = "";
 
     const randomCard = document.createElement("button");
     randomCard.type = "button";
-    randomCard.className = "mbs-card";
+    randomCard.className = "mbs-block-square mbs-block-random";
     randomCard.dataset.blockId = "random";
     randomCard.innerHTML = [
-      '<span class="mbs-preview mbs-random-preview">?</span>',
-      '<span class="mbs-card-copy">',
-      '  <strong>Random</strong>',
-      '  <span>Cycles through every loaded block.</span>',
-      '</span>'
+      '<span class="mbs-block-thumb mbs-random-preview">?</span>',
+      '<span class="mbs-block-label">Random</span>'
     ].join("");
-    grid.appendChild(randomCard);
+    blocksRow.appendChild(randomCard);
 
     for (const block of blockDefs) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "mbs-card";
+      button.className = "mbs-block-square";
       button.dataset.blockId = block.id;
       button.innerHTML = [
-        `<span class="mbs-preview"><img src="${block.src}" alt="${block.name}" /></span>`,
-        '<span class="mbs-card-copy">',
-        `  <strong>${block.name}</strong>`,
-        `  <span>${block.name} block texture.</span>`,
-        '</span>'
+        `<span class="mbs-block-thumb"><img src="${block.src}" alt="${block.name}" /></span>`,
+        `<span class="mbs-block-label">${block.name}</span>`
       ].join("");
-      grid.appendChild(button);
+      blocksRow.appendChild(button);
     }
   }
 
@@ -281,9 +277,9 @@
   }
 
   function updateUi() {
-    const cards = grid.querySelectorAll("[data-block-id]");
-    cards.forEach((card) => {
-      card.classList.toggle("is-active", card.dataset.blockId === state.selectedBlockId);
+    const blocks = blocksRow.querySelectorAll("[data-block-id]");
+    blocks.forEach((block) => {
+      block.classList.toggle("is-active", block.dataset.blockId === state.selectedBlockId);
     });
 
     const brushes = brushRow.querySelectorAll("[data-brush-mode]");
@@ -547,12 +543,18 @@
     const style = document.createElement("style");
     style.id = STYLE_ID;
     style.textContent = `
+      @font-face {
+        font-family: 'Minecraftia';
+        src: local('Minecraftia'), url('https://fonts.cdnfonts.com/s/17374/Minecraftia-Regular.woff') format('woff');
+        font-display: swap;
+      }
+
       #${ROOT_ID} {
         position: fixed;
         inset: 0;
         z-index: 2147483646;
         pointer-events: none;
-        font-family: Verdana, sans-serif;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
       }
 
       #${ROOT_ID},
@@ -571,16 +573,19 @@
 
       #${ROOT_ID} .mbs-ui {
         position: absolute;
-        inset: 0;
-        pointer-events: none;
+          background: #222 url('https://i.ibb.co/spY6G3XN/Redstone.png') repeat;
+          background-size: 32px 32px;
       }
 
       #${ROOT_ID} .mbs-menu-toggle,
       #${ROOT_ID} .mbs-panel {
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(15, 20, 27, 0.82);
-        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.26);
-        backdrop-filter: blur(12px);
+        border: 2.5px solid #222;
+        background: url('https://i.ibb.co/fGSJTkRG/Stones.jpg') repeat;
+        box-shadow: 0 0 0 4px #444, 0 20px 48px rgba(0,0,0,0.26);
+        backdrop-filter: none;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        letter-spacing: 0.5px;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
       }
 
       #${ROOT_ID} .mbs-menu-toggle {
@@ -588,29 +593,33 @@
         left: 18px;
         top: 18px;
         pointer-events: auto;
-        border-radius: 999px;
-        color: #edf6ff;
-        padding: 11px 15px;
+        border-radius: 6px;
+        color: #fff;
+        padding: 13px 22px;
+        font-size: 18px;
         cursor: pointer;
+        background-size: 64px 64px;
+        z-index: 10;
       }
 
       #${ROOT_ID} .mbs-menu-toggle.is-open {
-        border-color: rgba(110, 213, 119, 0.5);
-        background: rgba(110, 213, 119, 0.18);
+        border-color: #7eda8d;
+        background-color: #2a3c2a;
       }
 
       #${ROOT_ID} .mbs-panel {
         position: absolute;
         left: 18px;
-        top: 64px;
+        top: 140px;
         width: min(440px, calc(100vw - 36px));
         padding: 18px;
-        border-radius: 18px;
-        color: #edf6ff;
+        border-radius: 10px;
+        color: #fff;
         opacity: 0;
         transform: translateY(-8px) scale(0.98);
         pointer-events: none;
         transition: opacity 150ms ease, transform 150ms ease;
+        background-size: 64px 64px;
       }
 
       #${ROOT_ID} .mbs-panel.is-open {
@@ -627,18 +636,22 @@
       }
 
       #${ROOT_ID} .mbs-panel-title {
-        font-size: 16px;
+        font-size: 22px;
         font-weight: 700;
         margin-bottom: 4px;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        letter-spacing: 0.5px;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
       }
 
       #${ROOT_ID} .mbs-panel-subtitle,
       #${ROOT_ID} .mbs-footer,
-      #${ROOT_ID} .mbs-selected-meta,
-      #${ROOT_ID} .mbs-card-copy span {
-        font-size: 12px;
+      #${ROOT_ID} .mbs-selected-meta {
+        font-size: 13px;
         line-height: 1.5;
-        color: rgba(237, 246, 255, 0.72);
+        color: #e0e0e0;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
       }
 
       #${ROOT_ID} .mbs-panel-actions,
@@ -648,85 +661,106 @@
         flex-wrap: wrap;
       }
 
-      #${ROOT_ID} .mbs-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 12px;
+      #${ROOT_ID} .mbs-panel-actions .mbs-action {
+        min-width: 80px;
+        min-height: 40px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        background: #222 url('https://i.ibb.co/spY6G3XN/Redstone.png') repeat;
+        background-size: 32px 32px;
+        color: #fff;
+        border: 2.5px solid #222;
+        box-shadow: 0 2px 0 #000;
+        margin-bottom: 2px;
+        transition: border-color 0.12s;
+        cursor: pointer;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
+      }
+      #${ROOT_ID} .mbs-panel-actions .mbs-action.is-active {
+        border-color: #7eda8d;
+        background-color: #2a3c2a;
+      }
+
+      #${ROOT_ID} .mbs-blocks-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
         margin-bottom: 14px;
+        justify-content: flex-start;
       }
 
-      #${ROOT_ID} .mbs-card,
-      #${ROOT_ID} .mbs-brush,
-      #${ROOT_ID} .mbs-action,
-      #${ROOT_ID} .mbs-slot {
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        background: rgba(255, 255, 255, 0.06);
-        color: #edf6ff;
+      #${ROOT_ID} .mbs-block-square {
+        width: 72px;
+        height: 72px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        border: 2.5px solid #222;
+        background: #222 url('https://i.ibb.co/spY6G3XN/Redstone.png') repeat;
+        background-size: 32px 32px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        font-size: 15px;
+        color: #fff;
+        margin-bottom: 2px;
+        box-shadow: 0 2px 0 #000;
+        transition: border-color 0.12s;
       }
 
-      #${ROOT_ID} .mbs-card {
+      #${ROOT_ID} .mbs-block-square.is-active {
+        border-color: #7eda8d;
+        background-color: #2a3c2a;
+      }
+
+      #${ROOT_ID} .mbs-block-thumb {
+        width: 44px;
+        height: 44px;
         display: flex;
         align-items: center;
-        gap: 12px;
-        width: 100%;
-        padding: 12px;
-        border-radius: 14px;
-        text-align: left;
-        cursor: pointer;
-      }
-
-      #${ROOT_ID} .mbs-card.is-active,
-      #${ROOT_ID} .mbs-brush.is-active,
-      #${ROOT_ID} .mbs-slot.is-active {
-        border-color: rgba(110, 213, 119, 0.94);
-        background: rgba(110, 213, 119, 0.16);
-        box-shadow: 0 0 0 1px rgba(110, 213, 119, 0.24) inset;
-      }
-
-      #${ROOT_ID} .mbs-preview,
-      #${ROOT_ID} .mbs-slot-thumb {
-        display: grid;
-        place-items: center;
+        justify-content: center;
+        margin-bottom: 4px;
+        background: #111;
+        border-radius: 4px;
         overflow: hidden;
-        background: rgba(255, 255, 255, 0.08);
       }
 
-      #${ROOT_ID} .mbs-preview {
-        flex: 0 0 56px;
-        width: 56px;
-        height: 56px;
-        border-radius: 12px;
-      }
-
-      #${ROOT_ID} .mbs-preview img,
-      #${ROOT_ID} .mbs-slot-thumb img {
+      #${ROOT_ID} .mbs-block-thumb img {
         width: 100%;
         height: 100%;
         object-fit: cover;
         image-rendering: pixelated;
       }
 
-      #${ROOT_ID} .mbs-random-preview,
-      #${ROOT_ID} .mbs-slot-random {
-        font-size: 28px;
-        font-weight: 700;
-      }
-
-      #${ROOT_ID} .mbs-card-copy {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      #${ROOT_ID} .mbs-card-copy strong {
+      #${ROOT_ID} .mbs-block-label {
         font-size: 13px;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
+        color: #fff;
       }
 
       #${ROOT_ID} .mbs-brush,
       #${ROOT_ID} .mbs-action {
-        border-radius: 999px;
-        padding: 8px 12px;
+        border-radius: 6px;
+        padding: 10px 18px;
         cursor: pointer;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        font-size: 15px;
+        background: #222 url('https://i.ibb.co/fGSJTkRG/Stones.jpg') repeat;
+        background-size: 64px 64px;
+        color: #fff;
+        border: 2.5px solid #222;
+        box-shadow: 0 2px 0 #000;
+        margin-bottom: 2px;
+        transition: border-color 0.12s;
+      }
+
+      #${ROOT_ID} .mbs-brush.is-active,
+      #${ROOT_ID} .mbs-action.is-active {
+        border-color: #7eda8d;
+        background-color: #2a3c2a;
       }
 
       #${ROOT_ID} .mbs-slider-wrap {
@@ -738,8 +772,11 @@
         display: flex;
         justify-content: space-between;
         gap: 12px;
-        font-size: 12px;
+        font-size: 13px;
         margin-bottom: 8px;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        color: #fff;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
       }
 
       #${ROOT_ID} .mbs-size-slider {
@@ -748,6 +785,10 @@
 
       #${ROOT_ID} .mbs-footer {
         margin-top: 14px;
+        font-size: 13px;
+        font-family: 'Minecraftia', 'Courier New', Courier, monospace;
+        color: #fff;
+        text-shadow: 1px 1px 0 #000, 2px 2px 0 #222;
       }
 
       @media (max-width: 860px) {
@@ -764,8 +805,9 @@
       }
 
       @media (max-width: 620px) {
-        #${ROOT_ID} .mbs-grid {
-          grid-template-columns: 1fr;
+        #${ROOT_ID} .mbs-blocks-row {
+          flex-wrap: wrap;
+          gap: 8px;
         }
       }
     `;
