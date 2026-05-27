@@ -42,18 +42,15 @@
     [pixels[i], pixels[j]] = [pixels[j], pixels[i]];
   }
 
-  // Reveal loop (10x slower: 1 pixel every 10 frames)
+  // Reveal loop (12x slower: batch = 1)
   let idx = 0;
-  let frameCount = 0;
   function revealStep() {
-    frameCount++;
-    if (frameCount >= 10 && idx < pixels.length) {
+    let batch = 1; // pixels per frame (was 10)
+    for (let i = 0; i < batch && idx < pixels.length; ++i, ++idx) {
       let [x, y] = pixels[idx];
       let color = offCtx.getImageData(x, y, 1, 1).data;
       ctx.fillStyle = `rgb(${color[0]},${color[1]},${color[2]})`;
       ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
-      idx++;
-      frameCount = 0;
     }
     if (idx < pixels.length) {
       requestAnimationFrame(revealStep);
