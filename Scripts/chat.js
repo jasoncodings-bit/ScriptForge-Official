@@ -21,7 +21,9 @@
     userName: getSavedName(),
     seenIds: new Set(),
     latestCreatedAtMs: 0,
-    messages: []
+    messages: [],
+    unreadCount: 0,
+    lastPreview: "Press T to open"
   };
   window[INSTANCE_KEY] = state;
 
@@ -35,25 +37,45 @@
     '  <div class="sfc-header">',
     '    <div>',
     '      <div class="sfc-title">World Chat</div>',
-    '      <div class="sfc-subtitle">Press T to chat</div>',
+    '      <div class="sfc-subtitle">Press T to toggle chat</div>',
     '    </div>',
-    '    <button class="sfc-name" type="button"></button>',
+    '    <div class="sfc-actions">',
+    '      <button class="sfc-name" type="button"></button>',
+    '      <button class="sfc-hide" type="button" aria-label="Hide chat">Hide</button>',
+    '    </div>',
     '  </div>',
     '  <div class="sfc-status">Connecting...</div>',
     '  <div class="sfc-messages"></div>',
     '  <form class="sfc-composer" autocomplete="off">',
-    '    <input class="sfc-input" maxlength="160" placeholder="Type a message and press Enter" />',
+    '    <div class="sfc-compose-row">',
+    '      <input class="sfc-input" maxlength="160" placeholder="Type a message" />',
+    '      <button class="sfc-send" type="submit">Send</button>',
+    '    </div>',
+    '    <div class="sfc-compose-meta">',
+    '      <span class="sfc-helper">Enter sends. Esc hides.</span>',
+    '      <span class="sfc-counter">0/160</span>',
+    '    </div>',
     '  </form>',
-    '  <div class="sfc-footer">Press T to open chat. Press Esc to close.</div>',
-    '</div>'
+    '</div>',
+    '<button class="sfc-dock" type="button">',
+    '  <span class="sfc-dock-label">World Chat</span>',
+    '  <span class="sfc-dock-preview">Press T to open</span>',
+    '  <span class="sfc-dock-badge" hidden></span>',
+    '</button>'
   ].join("");
   document.body.appendChild(root);
 
   const nameButton = root.querySelector(".sfc-name");
+  const hideButton = root.querySelector(".sfc-hide");
   const statusEl = root.querySelector(".sfc-status");
   const messagesEl = root.querySelector(".sfc-messages");
   const composer = root.querySelector(".sfc-composer");
   const input = root.querySelector(".sfc-input");
+  const sendButton = root.querySelector(".sfc-send");
+  const counterEl = root.querySelector(".sfc-counter");
+  const dockButton = root.querySelector(".sfc-dock");
+  const dockPreviewEl = root.querySelector(".sfc-dock-preview");
+  const dockBadgeEl = root.querySelector(".sfc-dock-badge");
 
   nameButton.textContent = state.userName;
 
@@ -77,6 +99,7 @@
     for (const message of state.messages) {
       const row = document.createElement("div");
       row.className = "sfc-message";
+      row.classList.toggle("is-self", Boolean(message.isSelf));
 
       const meta = document.createElement("div");
       meta.className = "sfc-meta";
@@ -94,18 +117,38 @@
     messagesEl.scrollTop = messagesEl.scrollHeight;
   };
 
-  const openComposer = () => {
-    root.classList.add("is-open");
-    input.focus();
-    input.select();
+  const updateCounter = () => {
+    counterEl.textContent = `${input.value.length}/${MAX_MESSAGE_LENGTH}`;
   };
 
-  const closeComposer = (clearValue) => {
+  const updateDock = () => {
+    dockPreviewEl.textContent = state.lastPreview || "Press T to open";
+    dockBadgeEl.hidden = state.unreadCount < 1;
+    dockBadgeEl.textContent = state.unreadCount > 99 ? "99+" : String(state.unreadCount || "");
+  };
+
+  const showPanel = (focusInput) => {
+    root.classList.remove("is-hidden");
+    state.unreadCount = 0;
+    updateDock();
+
+    if (focusInput) {
+      window.requestAnimationFrame(() => {
+        input.focus();
+        input.select();
+      });
+    }
+  };
+
+  const hidePanel = (clearValue) => {
     if (clearValue) {
       input.value = "";
+      updateCounter();
     }
-    root.classList.remove("is-open");
+
+    root.classList.add("is-hidden");
     input.blur();
+    updateDock();
   };
 
   nameButton.addEventListener("click", () => {
@@ -114,7 +157,18 @@
     state.userName = cleanedName;
     localStorage.setItem(NAME_KEY, cleanedName);
     nameButton.textContent = cleanedName;
+    renderMessages();
   });
+
+  hideButton.addEventListener("click", () => {
+    hidePanel(true);
+  });
+
+  dockButton.addEventListener("click", () => {
+    showPanel(true);
+  });
+
+  input.addEventListener("input", updateCounter);
 
   state.keyHandler = (event) => {
     const active = document.activeElement;
@@ -126,13 +180,17 @@
 
     if ((event.key === "t" || event.key === "T") && !typing) {
       event.preventDefault();
-      openComposer();
+      if (root.classList.contains("is-hidden")) {
+        showPanel(true);
+      } else {
+        hidePanel(true);
+      }
       return;
     }
 
-    if (event.key === "Escape" && root.classList.contains("is-open")) {
+    if (event.key === "Escape" && !root.classList.contains("is-hidden")) {
       event.preventDefault();
-      closeComposer(true);
+      hidePanel(true);
     }
   };
   window.addEventListener("keydown", state.keyHandler, true);
@@ -147,11 +205,12 @@
 
     const text = input.value.trim();
     if (!text) {
-      closeComposer(true);
+      hidePanel(true);
       return;
     }
 
     input.disabled = true;
+    sendButton.disabled = true;
     try {
       await publishMessage({
         user: state.userName,
@@ -159,11 +218,13 @@
         createdAtMs: Date.now()
       });
       input.value = "";
-      closeComposer(false);
+      updateCounter();
+      hidePanel(false);
     } catch (error) {
       setStatus(`Send failed: ${error.message}`, true);
     } finally {
       input.disabled = false;
+      sendButton.disabled = false;
     }
   });
 
@@ -181,6 +242,9 @@
   };
 
   renderMessages();
+  updateCounter();
+  updateDock();
+  hidePanel(false);
 
   if (!hasUsableBackendUrl(BACKEND_URL)) {
     setStatus("Set window.__CHAT_BACKEND_URL to your Cloud Run URL, then rerun chat.js.", true);
@@ -233,7 +297,7 @@
       method: "GET",
       cache: "no-store"
     });
-    ingestMessages(payload.messages);
+    ingestMessages(payload.messages, { trackUnread: false });
     setStatus(`Connected to room: ${ROOM_ID}`);
   }
 
@@ -269,7 +333,7 @@
 
     const result = await response.json().catch(() => null);
     if (result && result.message) {
-      ingestMessages([result.message]);
+      ingestMessages([result.message], { trackUnread: false });
     }
   }
 
@@ -285,7 +349,7 @@
         method: "GET",
         cache: "no-store"
       });
-      ingestMessages(payload.messages);
+      ingestMessages(payload.messages, { trackUnread: true });
       setStatus(`Connected to room: ${ROOM_ID}`);
     } catch (error) {
       setStatus(`Polling failed: ${error.message}`, true);
@@ -294,8 +358,10 @@
     }
   }
 
-  function ingestMessages(messages) {
+  function ingestMessages(messages, options) {
+    const trackUnread = Boolean(options && options.trackUnread);
     let changed = false;
+    let newRemoteCount = 0;
 
     for (const rawMessage of Array.isArray(messages) ? messages : []) {
       const message = normalizeIncomingMessage(rawMessage);
@@ -306,6 +372,9 @@
       state.seenIds.add(message.id);
       state.latestCreatedAtMs = Math.max(state.latestCreatedAtMs, message.createdAtMs || 0);
       state.messages.push(message);
+      if (trackUnread && !message.isSelf) {
+        newRemoteCount += 1;
+      }
       changed = true;
     }
 
@@ -324,6 +393,18 @@
       state.messages = state.messages.slice(-MAX_MESSAGES);
     }
 
+    const latestMessage = state.messages[state.messages.length - 1];
+    if (latestMessage) {
+      state.lastPreview = buildPreview(latestMessage);
+    }
+
+    if (root.classList.contains("is-hidden") && trackUnread && newRemoteCount > 0) {
+      state.unreadCount += newRemoteCount;
+    } else if (!root.classList.contains("is-hidden")) {
+      state.unreadCount = 0;
+    }
+
+    updateDock();
     renderMessages();
   }
 
@@ -337,12 +418,24 @@
       return null;
     }
 
+    const user = sanitizeName(rawMessage.user) || "Guest";
+
     return {
       id: String(rawMessage.id),
-      user: sanitizeName(rawMessage.user) || "Guest",
+      user,
       text,
-      createdAtMs: Number(rawMessage.createdAtMs) || Date.now()
+      createdAtMs: Number(rawMessage.createdAtMs) || Date.now(),
+      isSelf: user === state.userName
     };
+  }
+
+  function buildPreview(message) {
+    if (!message) {
+      return "Press T to open";
+    }
+
+    const preview = `${message.user}: ${message.text}`;
+    return preview.length > 42 ? `${preview.slice(0, 39)}...` : preview;
   }
 
   async function requestJson(url, options) {
@@ -406,6 +499,10 @@
         backdrop-filter: blur(8px);
       }
 
+      #${UI_ID}.is-hidden .sfc-panel {
+        display: none;
+      }
+
       #${UI_ID} .sfc-header {
         display: flex;
         align-items: center;
@@ -416,26 +513,53 @@
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
       }
 
+      #${UI_ID} .sfc-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
       #${UI_ID} .sfc-title {
         font-size: 14px;
         font-weight: 700;
       }
 
       #${UI_ID} .sfc-subtitle,
-      #${UI_ID} .sfc-footer,
       #${UI_ID} .sfc-status,
       #${UI_ID} .sfc-meta,
-      #${UI_ID} .sfc-empty {
+      #${UI_ID} .sfc-empty,
+      #${UI_ID} .sfc-helper,
+      #${UI_ID} .sfc-counter,
+      #${UI_ID} .sfc-dock-preview {
         color: rgba(245, 241, 212, 0.7);
       }
 
-      #${UI_ID} .sfc-name {
+      #${UI_ID} .sfc-name,
+      #${UI_ID} .sfc-hide,
+      #${UI_ID} .sfc-send {
         border: 1px solid rgba(255, 255, 255, 0.14);
         background: rgba(255, 255, 255, 0.08);
         color: #f5f1d4;
         border-radius: 999px;
         padding: 6px 10px;
         cursor: pointer;
+      }
+
+      #${UI_ID} .sfc-hide,
+      #${UI_ID} .sfc-send {
+        padding-inline: 12px;
+      }
+
+      #${UI_ID} .sfc-hide:hover,
+      #${UI_ID} .sfc-name:hover,
+      #${UI_ID} .sfc-send:hover,
+      #${UI_ID} .sfc-dock:hover {
+        background: rgba(255, 255, 255, 0.14);
+      }
+
+      #${UI_ID} .sfc-send:disabled {
+        opacity: 0.6;
+        cursor: wait;
       }
 
       #${UI_ID} .sfc-status {
@@ -448,13 +572,24 @@
       }
 
       #${UI_ID} .sfc-messages {
-        height: 188px;
+        height: 180px;
         overflow-y: auto;
         padding: 10px 12px;
       }
 
+      #${UI_ID} .sfc-message {
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
       #${UI_ID} .sfc-message + .sfc-message {
-        margin-top: 10px;
+        margin-top: 8px;
+      }
+
+      #${UI_ID} .sfc-message.is-self {
+        background: rgba(126, 218, 141, 0.14);
+        border: 1px solid rgba(126, 218, 141, 0.22);
       }
 
       #${UI_ID} .sfc-meta {
@@ -469,15 +604,17 @@
       }
 
       #${UI_ID} .sfc-composer {
-        display: none;
         padding: 0 12px 10px;
       }
 
-      #${UI_ID}.is-open .sfc-composer {
-        display: block;
+      #${UI_ID} .sfc-compose-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
       #${UI_ID} .sfc-input {
+        flex: 1 1 auto;
         width: 100%;
         border: 1px solid rgba(255, 255, 255, 0.12);
         background: rgba(0, 0, 0, 0.24);
@@ -491,8 +628,57 @@
         border-color: rgba(126, 218, 141, 0.9);
       }
 
-      #${UI_ID} .sfc-footer {
-        padding: 0 12px 10px;
+      #${UI_ID} .sfc-compose-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding-top: 6px;
+        font-size: 11px;
+      }
+
+      #${UI_ID} .sfc-dock {
+        display: none;
+        align-items: center;
+        gap: 10px;
+        width: 320px;
+        padding: 9px 12px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+        background: rgba(16, 18, 22, 0.94);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+        color: #f5f1d4;
+        cursor: pointer;
+      }
+
+      #${UI_ID}.is-hidden .sfc-dock {
+        display: flex;
+      }
+
+      #${UI_ID} .sfc-dock-label {
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      #${UI_ID} .sfc-dock-preview {
+        min-width: 0;
+        flex: 1 1 auto;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        text-align: left;
+      }
+
+      #${UI_ID} .sfc-dock-badge {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        border-radius: 999px;
+        background: #7eda8d;
+        color: #162016;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 22px;
       }
     `;
     document.head.appendChild(style);
